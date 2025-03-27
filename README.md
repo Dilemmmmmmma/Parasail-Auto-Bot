@@ -1,73 +1,73 @@
-# Parasail Node Bot
+# Parasail 自动节点机器人
 
-## Description
-Parasail Node Bot is an automated tool for managing and interacting with Parasail network nodes. It provides a terminal-based UI for monitoring node stats, performing check-ins, and automating node-related tasks.
+## 项目介绍
+Parasail 自动节点机器人是一个用于管理和自动执行Parasail网络节点任务的工具。它可以自动完成节点初始化、定期签到、查看节点统计等任务，支持多个钱包私钥轮换使用，大大提高了管理效率。
 
-## Features
-- Automatic user verification with Ethereum wallet
-- Node onboarding
-- Regular check-ins
-- Real-time node statistics tracking
-- Terminal-based dashboard with logging and stats display
-- Automatic token refresh mechanism
+## 主要功能
+- 自动用户验证（使用以太坊钱包）
+- 节点初始化（Onboarding）
+- 定期自动签到
+- 实时节点数据统计
+- 终端界面，实时显示节点状态和日志
+- 支持多私钥轮换，自动切换
+- 错误自动重试机制
 
-## Prerequisites
-- Node.js (v14 or higher)
-- An Ethereum wallet with private key
-- Internet connection
+## 系统要求
+- Node.js (v14或更高版本)
+- 以太坊钱包私钥
+- 互联网连接
 
-## Installation
+## 安装方法
 
-1. Clone the repository:
-```bash
-git clone https://github.com/airdropinsiders/Parasail-Auto-Bot.git
-cd Parasail-Auto-Bot
-```
+### 简易安装（推荐）
+1. 双击 `start.bat` 文件，系统会自动检查环境、安装依赖并启动程序
 
-2. Install dependencies:
+### 手动安装
+1. 确保您已安装Node.js
+2. 打开命令提示符或PowerShell，进入项目目录
+3. 执行安装命令：
 ```bash
 npm install
 ```
-
-3. Create a `config.json` file in the project root with the following structure:
-```json
-{
-  "privateKey": "YOUR_ETHEREUM_PRIVATE_KEY"
-}
-```
-
-⚠️ **IMPORTANT**: Never commit your `config.json` to version control. Add it to `.gitignore`.
-
-## Usage
-
+4. 启动程序：
 ```bash
 npm start
 ```
 
-## Dependencies
-- blessed: Terminal UI library
-- blessed-contrib: Advanced terminal dashboards
-- axios: HTTP client
-- ethers: Ethereum wallet and signing library
+## 配置说明
+配置文件 `config.json` 包含以下重要参数：
 
-## Configuration
-- `privateKey`: Your Ethereum wallet's private key
-- `bearer_token`: Automatically populated after verification
-- `wallet_address`: Automatically populated after verification
+- `currentKeyIndex`: 当前使用的私钥索引
+- `autoRotateKeys`: 是否自动轮换私钥（true/false）
+- `privateKeys`: 私钥列表，所有需要使用的以太坊钱包私钥
 
-## Controls
-- Press `Q` or `Ctrl+C` to quit the application
+## 使用说明
+1. 确保 `config.json` 中已正确配置好所有私钥
+2. 双击 `start.bat` 一键启动程序
+3. 程序会自动验证钱包、初始化节点并开始签到
+4. 每次签到成功后，程序会自动切换到下一个私钥
+5. 如果某个私钥操作失败，程序会自动尝试下一个私钥
 
-## Security Notes
-- Keep your private key confidential
-- Use a dedicated wallet for this bot
-- Verify the source and safety of the bot before use
+## 界面说明
+- 左侧：操作日志区域，显示实时操作记录
+- 右侧上方：倒计时，显示距离下次签到的时间
+- 右侧中部：当前节点统计信息
+- 右侧下方：当前使用的私钥索引
+- 底部：退出提示，按Q键可以退出程序
 
-## Disclaimer
-This bot is provided as-is. Use at your own risk. Always review the code and understand its functionality before running.
+## 注意事项
+- 请妥善保管您的私钥，不要泄露给他人
+- 建议使用专用钱包运行此机器人
+- 如遇到问题，可以查看日志区域的错误信息
 
-## License
-MIT License
+## 安全提示
+- 私钥信息保存在本地，不会上传到任何服务器
+- config.json 文件包含敏感信息，请勿分享给他人
+- 建议使用专用的钱包，而不是包含大量资产的主钱包
 
-## Contributing
-Contributions are welcome! Please open an issue or submit a pull request.
+## 免责声明
+此工具仅用于学习和研究目的，使用者需自行承担使用风险。作者不对因使用此工具而导致的任何损失负责。
+
+---
+
+©️ 2023 空投内部人员，保留所有权利。
