@@ -1,3 +1,10 @@
 {
-    "privateKey": "YOUR_ETHEREUM_PRIVATE_KEY"
+    "currentKeyIndex": 0,
+    "autoRotateKeys": true,
+    "checkInterval": 10,
+    "privateKeys": [
+      "私钥1",
+      "私钥2",
+      "私钥3"
+    ]
   }
