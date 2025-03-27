@@ -5,11 +5,22 @@ const fs = require('fs');
 const path = require('path');
 const ethers = require('ethers');
 
+// 设置控制台输出编码为UTF-8
+process.stdout.setEncoding('utf8');
+if (process.platform === 'win32') {
+  try {
+    require('child_process').execSync('chcp 65001', { stdio: 'ignore' });
+  } catch (e) {
+    // 忽略错误
+  }
+}
+
 class ParasailNodeBot {
   constructor() {
     this.config = this.loadConfig();
     this.baseUrl = 'https://www.parasail.network/api';
     this.initUI();
+    this.completedKeys = new Set(); // 添加已完成私钥的集合
   }
 
   loadConfig() {
@@ -32,17 +43,57 @@ class ParasailNodeBot {
     }
   }
 
+  getCurrentPrivateKey() {
+    // 获取当前私钥
+    if (Array.isArray(this.config.privateKeys) && this.config.privateKeys.length > 0) {
+      return this.config.privateKeys[this.config.currentKeyIndex];
+    } else {
+      this.log("Error: No private keys available in config");
+      process.exit(1);
+    }
+  }
+
+  moveToNextKey() {
+    // 切换到下一个私钥
+    if (!this.config.autoRotateKeys) return;
+    
+    if (Array.isArray(this.config.privateKeys) && this.config.privateKeys.length > 0) {
+      // 记录当前私钥已完成
+      this.completedKeys.add(this.config.currentKeyIndex);
+      
+      // 检查是否所有私钥都已完成
+      if (this.completedKeys.size >= this.config.privateKeys.length) {
+        this.log(`All keys completed, will start next round after 24.5 hours`);
+        // 重置完成集合
+        this.completedKeys.clear();
+        // 回到第一个私钥
+        this.config.currentKeyIndex = 0;
+      } else {
+        // 正常移动到下一个私钥
+        this.config.currentKeyIndex = (this.config.currentKeyIndex + 1) % this.config.privateKeys.length;
+      }
+      
+      this.log(`Switched to next key (index: ${this.config.currentKeyIndex})`);
+      this.saveConfig(this.config);
+      
+      // 重置令牌和钱包地址，以便在下次需要时重新获取
+      delete this.config.bearer_token;
+      delete this.config.wallet_address;
+    }
+  }
+
   async generateSignature() {
-    const wallet = new ethers.Wallet(this.config.privateKey);
+    const privateKey = this.getCurrentPrivateKey();
+    const wallet = new ethers.Wallet(privateKey);
     const message = `By signing this message, you confirm that you agree to the Parasail Terms of Service.
 
-Parasail (including the Website and Parasail Smart Contracts) is not intended for:
-(a) access and/or use by Excluded Persons;
-(b) access and/or use by any person or entity in, or accessing or using the Website from, an Excluded Jurisdiction.
+Parasail (including the website and Parasail smart contracts) are not available for:
+(a) access and/or use by Excluded Persons; or
+(b) access and/or use by any person or entity that is located in, established in, or a resident of an Excluded Jurisdiction.
 
-Excluded Persons are prohibited from accessing and/or using Parasail (including the Website and Parasail Smart Contracts).
+Excluded Persons are prohibited from accessing and/or using Parasail (including the website and Parasail smart contracts).
 
-For full terms, refer to: https://parasail.network/Parasail_User_Terms.pdf`;
+For complete terms, please refer to: https://parasail.network/Parasail_User_Terms.pdf`;
     
     const signature = await wallet.signMessage(message);
     return {
@@ -56,7 +107,7 @@ For full terms, refer to: https://parasail.network/Parasail_User_Terms.pdf`;
     try {
       const signatureData = await this.generateSignature();
       
-      this.log(`Attempting verification for address: ${signatureData.address}`);
+      this.log(`Verifying address: ${signatureData.address}`);
       
       const response = await axios.post(`${this.baseUrl}/user/verify`, signatureData, {
         headers: {
@@ -73,7 +124,7 @@ For full terms, refer to: https://parasail.network/Parasail_User_Terms.pdf`;
       return response.data;
     } catch (error) {
       if (error.response) {
-        this.log(`Verification Error Details:`);
+        this.log(`Verification error details:`);
         this.log(`Status: ${error.response.status}`);
         this.log(`Data: ${JSON.stringify(error.response.data)}`);
         this.log(`Headers: ${JSON.stringify(error.response.headers)}`);
@@ -90,7 +141,8 @@ For full terms, refer to: https://parasail.network/Parasail_User_Terms.pdf`;
   initUI() {
     this.screen = blessed.screen({
       smartCSR: true,
-      title: 'Auto Bot Parasail - Airdrop Insiders'
+      title: 'Parasail Auto Bot - Airdrop Insiders',
+      fullUnicode: true  // 添加全Unicode支持
     });
 
     this.layout = blessed.layout({
@@ -107,7 +159,7 @@ For full terms, refer to: https://parasail.network/Parasail_User_Terms.pdf`;
       left: 0,
       width: '100%',
       height: 3,
-      content: '{center}{bold}Auto Bot Parasail - Airdrop Insiders{/bold}{/center}',
+      content: '{center}{bold}Parasail Auto Bot - Airdrop Insiders{/bold}{/center}',
       tags: true,
       border: 'line',
       style: {
@@ -173,9 +225,21 @@ For full terms, refer to: https://parasail.network/Parasail_User_Terms.pdf`;
       left: 1,
       right: 1,
       height: '50%',
-      content: 'Loading Node Stats...',
+      content: 'Loading node stats...',
       style: {
         fg: 'white'
+      }
+    });
+
+    this.keyInfoBox = blessed.box({
+      parent: this.statsBox,
+      bottom: 3,
+      left: 1,
+      right: 1,
+      height: 3,
+      content: `Current Key Index: ${this.config.currentKeyIndex}/${this.config.privateKeys.length - 1}`,
+      style: {
+        fg: 'yellow'
       }
     });
 
@@ -200,6 +264,12 @@ For full terms, refer to: https://parasail.network/Parasail_User_Terms.pdf`;
   }
 
   log(message) {
+    // 记录到日志文件
+    try {
+      fs.appendFileSync('bot_log.txt', `${new Date().toISOString()} - ${message}\n`);
+    } catch (e) {
+      // 忽略错误
+    }
     this.logBox.log(message);
     this.screen.render();
   }
@@ -213,11 +283,12 @@ For full terms, refer to: https://parasail.network/Parasail_User_Terms.pdf`;
       `Total Distributed: ${stats.data.total_distributed || 'None'}`,
       `Last Check-in: ${stats.data.last_checkin_time 
         ? new Date(stats.data.last_checkin_time * 1000).toLocaleString() 
-        : 'N/A'}`,
+        : 'None'}`,
       `Card Count: ${stats.data.card_count}`
     ];
 
     this.nodeStatsBox.setContent(statsContent.join('\n'));
+    this.keyInfoBox.setContent(`Current Key Index: ${this.config.currentKeyIndex}/${this.config.privateKeys.length - 1}`);
     this.screen.render();
   }
 
@@ -233,19 +304,19 @@ For full terms, refer to: https://parasail.network/Parasail_User_Terms.pdf`;
       return response.data;
     } catch (error) {
       if (error.response && error.response.status === 401) {
-        this.log('Token expired. Attempting to refresh...');
+        this.log('Token expired. Trying to refresh...');
         await this.verifyUser();
         return this.getNodeStats();
       }
 
       if (error.response) {
-        this.log(`Node Stats Error Details:`);
+        this.log(`Node stats error details:`);
         this.log(`Status: ${error.response.status}`);
         this.log(`Data: ${JSON.stringify(error.response.data)}`);
         this.log(`Headers: ${JSON.stringify(error.response.headers)}`);
       }
       
-      this.log(`Failed to fetch node stats: ${error.message}`);
+      this.log(`Failed to get node stats: ${error.message}`);
       throw error;
     }
   }
@@ -268,13 +339,13 @@ For full terms, refer to: https://parasail.network/Parasail_User_Terms.pdf`;
       return checkInResponse.data;
     } catch (error) {
       if (error.response && error.response.status === 401) {
-        this.log('Token expired. Attempting to refresh...');
+        this.log('Token expired. Trying to refresh...');
         await this.verifyUser();
         return this.checkIn();
       }
       
       if (error.response) {
-        this.log(`Check-in Error Details:`);
+        this.log(`Check-in error details:`);
         this.log(`Status: ${error.response.status}`);
         this.log(`Data: ${JSON.stringify(error.response.data)}`);
         this.log(`Headers: ${JSON.stringify(error.response.headers)}`);
@@ -298,29 +369,32 @@ For full terms, refer to: https://parasail.network/Parasail_User_Terms.pdf`;
         }
       );
 
-      this.log('Node onboarding successful');
+      this.log('Node initialization successful');
       return response.data;
     } catch (error) {
       if (error.response && error.response.status === 401) {
-        this.log('Token expired. Attempting to refresh...');
+        this.log('Token expired. Trying to refresh...');
         await this.verifyUser();
         return this.onboardNode();
       }
       
       if (error.response) {
-        this.log(`Onboarding Error Details:`);
+        this.log(`Initialization error details:`);
         this.log(`Status: ${error.response.status}`);
         this.log(`Data: ${JSON.stringify(error.response.data)}`);
         this.log(`Headers: ${JSON.stringify(error.response.headers)}`);
       }
       
-      this.log(`Onboarding error: ${error.message}`);
+      this.log(`Initialization error: ${error.message}`);
       throw error;
     }
   }
 
   startCountdown() {
-    let remainingSeconds = 24 * 60 * 60; 
+    // 默认24.5小时 (单位：秒)
+    let remainingSeconds = this.completedKeys.size >= this.config.privateKeys.length ? 
+                          24.5 * 60 * 60 : 
+                          (this.config.checkInterval || 10); 
     
     const countdownInterval = setInterval(() => {
       const hours = Math.floor(remainingSeconds / 3600);
@@ -352,7 +426,7 @@ For full terms, refer to: https://parasail.network/Parasail_User_Terms.pdf`;
         const stats = await this.getNodeStats();
         this.updateNodeStats(stats);
       } catch (error) {
-        this.log(`Stats update failed: ${error.message}`);
+        this.log(`Failed to update stats: ${error.message}`);
       }
     }, 60000);
   }
@@ -366,21 +440,30 @@ For full terms, refer to: https://parasail.network/Parasail_User_Terms.pdf`;
       const initialStats = await this.getNodeStats();
       this.updateNodeStats(initialStats);
       
+      // 任务完成后，切换到下一个私钥
+      this.moveToNextKey();
+      
+      // 重新启动计时器
       this.startCountdown();
     } catch (error) {
       this.log(`Routine tasks failed: ${error.message}`);
+      // 如果失败，尝试使用下一个私钥
+      this.log('Trying next key...');
+      this.moveToNextKey();
+      setTimeout(() => this.performRoutineTasks(), 5000);
     }
   }
 
   async start() {
     this.log(`Starting Parasail Node Bot`);
+    this.log(`Using key index: ${this.config.currentKeyIndex}/${this.config.privateKeys.length - 1}`);
     
     try {
       if (!this.config.bearer_token) {
         await this.verifyUser();
       }
 
-      this.log(`Wallet Address: ${this.config.wallet_address}`);
+      this.log(`Wallet address: ${this.config.wallet_address}`);
 
       await this.onboardNode();
       await this.checkIn();
@@ -391,6 +474,10 @@ For full terms, refer to: https://parasail.network/Parasail_User_Terms.pdf`;
       this.startCountdown();
     } catch (error) {
       this.log(`Initialization failed: ${error.message}`);
+      // 如果初始化失败，尝试使用下一个私钥
+      this.log('Trying next key...');
+      this.moveToNextKey();
+      setTimeout(() => this.start(), 5000);
     }
   }
 }
@@ -401,5 +488,5 @@ async function main() {
 }
 
 main().catch(error => {
-  console.error('Main error:', error);
+  console.error('Main program error:', error);
 });
